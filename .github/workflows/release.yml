@@ -1,0 +1,96 @@
+name: Release Workflow
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths-ignore: ["docs/**"]
+
+  push:
+    branches: ["main"]
+    paths-ignore: ["docs/**"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+  # Trigger when a new release is published
+  release:
+    types: [published]
+
+    
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run semantic-release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: npx semantic-release
+
+  build-and-upload:
+    name: Build and Upload Mender Artifacts
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to DockerHub
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: echo $DOCKER_PASSWORD | docker login -u $DOCKER_USER --password-stdin
+
+    - name: Set up Mender CLI
+      run: |
+        curl -L https://downloads.mender.io/mender-cli/1.12.0/linux/mender-cli -o mender-cli
+        chmod +x mender-cli
+        sudo mv mender-cli /usr/local/bin/mender-cli
+        which mender-cli
+        file /usr/local/bin/mender-cli
+
+    - name: Set up Mender app-gen
+      run: |
+        curl -L https://raw.githubusercontent.com/mendersoftware/app-update-module/1.0.0/gen/app-gen -o app-gen
+        chmod +x app-gen
+        sudo mv app-gen /usr/local/bin/app-gen
+        which app-gen
+
+    - name: Build and upload Mender artifacts
+      env:
+        ARTIFACT_NAME: mendertemplate
+        PLATFORM: linux/amd64
+        APPLICATION_NAME: mendertemplate
+        IMAGE: jeffail/benthos:latest
+        ORCHESTRATOR: docker-compose
+        OUTPUT_DIR: ./artifacts
+        SOFTWARE_NAME: softwarename
+        SOFTWARE_VERSION: ${{ steps.semantic-release.outputs.new-release-version }}
+        MANIFESTS_DIRS: ./manifests/device/http-producer
+        DEVICE_TYPES: futro
+        MENDER_SERVER_URL: ${{ secrets.MENDER_SERVER_URL }}
+        MENDER_USERNAME: ${{ secrets.MENDER_USERNAME }}
+        MENDER_PASSWORD: ${{ secrets.MENDER_PASSWORD }}
+        MENDER_TENANT_TOKEN: ${{ secrets.MENDER_TENANT_TOKEN }}
+      run: | 
+        file /usr/local/bin/mender-cli
+        make build-and-upload
+
+    - name: Clean up artifacts
+      run: make clean

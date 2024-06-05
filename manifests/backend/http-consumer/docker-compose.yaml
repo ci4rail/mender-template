@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  benthos_consumer:
+    image: jeffail/benthos:latest
+    container_name: benthos_consumer
+    volumes:
+      - ./benthos.yaml:/benthos.yaml
+    environment:
+      CONSUMER_ADDRESS: "0.0.0.0:32655"
+      CONSUMER_PATH: "/post"
+    ports:
+      - "3264:3264"
+    network_mode: host
+   

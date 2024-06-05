@@ -1,0 +1,5 @@
+# os.putenv('DOCKER_HOST', 'tcp://localhost:2375')
+docker_compose([
+    'http-producer/docker-compose.yaml'
+])
+

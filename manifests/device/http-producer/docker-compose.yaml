@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  benthos_generator:
+    image: jeffail/benthos:latest
+    container_name: benthos_generator
+    volumes:
+      - ./benthos.yaml:/benthos.yaml
+    environment:
+      CONSUMER_ADDRESS: "0.0.0.0:32652"
+      CONSUMER_PATH: "/post"
+    command: "-c /benthos.yaml"
+    network_mode: host

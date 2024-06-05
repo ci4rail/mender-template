@@ -1,0 +1,8 @@
+input:
+  http_server:
+    address: "${CONSUMER_ADDRESS}"
+    path: "${CONSUMER_PATH}"
+
+output:
+  stdout:
+    codec: lines

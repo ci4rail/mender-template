@@ -1,0 +1,14 @@
+input:
+  generate:
+    count: 0
+    interval: 1s
+    mapping: |
+      root.id = uuid_v4()
+      root.timestamp = timestamp_unix()
+      root.message = "Hello, Benthos!"
+
+output:
+  http_client:
+    url: http://${CONSUMER_ADDRESS}${CONSUMER_PATH}
+    verb: POST
+    retry_period: 1s

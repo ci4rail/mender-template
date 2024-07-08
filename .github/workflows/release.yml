@@ -18,32 +18,35 @@ on:
 
     
 jobs:
-  release:
-    name: Release
+  create-release:
+    name: release
     runs-on: ubuntu-latest
 
+    outputs:
+      new_release_version: ${{ steps.semantic-release.outputs.new_release_version }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: npm install
 
-    - name: Run semantic-release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: npx semantic-release
-
+      - name: Run semantic-release
+        id: semantic-release
+        uses: cycjimmy/semantic-release-action@v4.1.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
   build-and-upload:
     name: Build and Upload Mender Artifacts
     runs-on: ubuntu-latest
-    needs: release
-
+    needs: create-release
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -81,7 +84,7 @@ jobs:
         ORCHESTRATOR: docker-compose
         OUTPUT_DIR: ./artifacts
         SOFTWARE_NAME: softwarename
-        SOFTWARE_VERSION: ${{ steps.semantic-release.outputs.new-release-version }}
+        SOFTWARE_VERSION: ${{ needs.create-release.outputs.new_release_version }}
         MANIFESTS_DIRS: ./manifests/device/http-producer
         DEVICE_TYPES: futro
         MENDER_SERVER_URL: ${{ secrets.MENDER_SERVER_URL }}

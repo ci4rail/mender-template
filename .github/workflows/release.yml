@@ -65,15 +65,18 @@ jobs:
         curl -L https://downloads.mender.io/mender-cli/1.12.0/linux/mender-cli -o mender-cli
         chmod +x mender-cli
         sudo mv mender-cli /usr/local/bin/mender-cli
-        which mender-cli
-        file /usr/local/bin/mender-cli
 
     - name: Set up Mender app-gen
       run: |
         curl -L https://raw.githubusercontent.com/mendersoftware/app-update-module/1.0.0/gen/app-gen -o app-gen
         chmod +x app-gen
         sudo mv app-gen /usr/local/bin/app-gen
-        which app-gen
+    
+    - name: Set up Mender artifact
+      run: |   
+        curl -L https://downloads.mender.io/mender-artifact/3.11.2/linux/mender-artifact -o mender-artifact
+        chmod +x mender-artifact
+        sudo mv mender-artifact /usr/local/bin/mender-artifact
 
     - name: Build and upload Mender artifacts
       env:

@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/ci4rail/mender-template/compare/v1.0.0...v1.0.1) (2024-07-08)
+
+
+### Bug Fixes
+
+* pump ([397fa79](https://github.com/ci4rail/mender-template/commit/397fa79caf345212866720a6c6571a706b3a8d12))
+
 # 1.0.0 (2024-07-08)
 
 

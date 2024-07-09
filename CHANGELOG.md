@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/ci4rail/mender-template/compare/v1.0.3...v1.1.0) (2024-07-09)
+
+
+### Features
+
+* abc ([cdb2274](https://github.com/ci4rail/mender-template/commit/cdb227495aad7b8aa083fb8fc97a09132f6d8473))
+
 ## [1.0.3](https://github.com/ci4rail/mender-template/compare/v1.0.2...v1.0.3) (2024-07-08)
 
 

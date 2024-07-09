@@ -11,7 +11,7 @@ SOFTWARE_NAME ?= softwarename
 SOFTWARE_VERSION ?= v1.0.1
 
 # List of manifest directories
-MANIFESTS_DIRS ?= ./app/benthos-http-producer #./app/go-template # ./yet-another-manifest-dir
+MANIFESTS_DIRS ?= ./app/benthos-http-producer/manifest #./app/go-template/manifest # ./yet-another-manifest-dir
 
 # List of device types
 DEVICE_TYPES ?= template-device # another-device yet-another-device

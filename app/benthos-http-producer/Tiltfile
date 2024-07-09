@@ -1,4 +1,4 @@
 docker_compose([
-    'docker-compose.yaml'
+    'manifest/docker-compose.yaml'
 ])
 

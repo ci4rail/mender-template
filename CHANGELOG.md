@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/ci4rail/mender-template/compare/v1.1.0...v1.1.1) (2024-07-09)
+
+
+### Bug Fixes
+
+* chaged structure to create smaller artifacts ([73d934a](https://github.com/ci4rail/mender-template/commit/73d934a6122fd3120ef3b956a062350c3acfadd8))
+
 # [1.1.0](https://github.com/ci4rail/mender-template/compare/v1.0.3...v1.1.0) (2024-07-09)
 
 

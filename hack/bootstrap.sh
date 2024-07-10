@@ -125,7 +125,22 @@ install_mender_docker_compose_update_module() {
     echo "Mender Docker Compose update module installed successfully."
 }
 
+check_environment_vars() {
+
+    if [ -z "$DEVICE_TYPE" ]; then
+        echo "Error: DEVICE_TYPE variable is not set."
+        exit 1
+    fi
+
+    if [ -z "$TENANT_TOKEN" ]; then
+        echo "Error: TENANT_TOKEN variable is not set."
+        exit 1
+    fi
+
+}
+
 # Main script execution
+check_environment_vars
 update_package_list
 install_docker
 install_docker_compose

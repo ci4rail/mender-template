@@ -4,7 +4,20 @@ Template project to create multi-application deployments for mender based system
 
 ![Folder](./docs/folders.png "Folder")
 
- ## bootstrap your device for docker-compose based application updates
+## Use this Template
+
+This is a github template project. So use "Use this template" and create a new repository for your project. 
+
+Please make sure, that the followin github action secrets are defined:
+
+* DOCKER_PASSWORD
+* DOCKER_USERNAME
+* MENDER_PASSWORD
+* MENDER_SERVER_URL
+* MENDER_TENANT_TOKEN
+* MENDER_USERNAME
+
+## bootstrap your device for docker-compose based application updates
 
 requirements: 
 * Ubuntu 22.04
@@ -35,6 +48,17 @@ uncomment the `os.putenv('DOCKER_HOST', 'tcp://localhost:2375')` line in your `T
 
 The local test environment is started by `tilt up -f Tiltfile.host`. The host services are located under `host`.
 
+## push new mender versions locally
 
+To manually push your local changes to mender you can use the Makefile.
+
+Please define the following environment variables:
+
+* MENDER_SERVER_URL (when different to `hosted.mender.io`)
+* MENDER_USERNAME
+* MENDER_PASSWORD
+* MENDER_TENANT_TOKEN
+
+Then run `make all`.
 
 

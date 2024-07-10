@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/ci4rail/mender-template/compare/v1.1.1...v1.2.0) (2024-07-10)
+
+
+### Features
+
+* now you can add different container images to different applications ([c8e004a](https://github.com/ci4rail/mender-template/commit/c8e004af184df96789ce1cfee7269398aa43d130))
+
 ## [1.1.1](https://github.com/ci4rail/mender-template/compare/v1.1.0...v1.1.1) (2024-07-09)
 
 

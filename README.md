@@ -46,7 +46,7 @@ uncomment the `os.putenv('DOCKER_HOST', 'tcp://localhost:2375')` line in your `T
 
 ### local test environment
 
-The local test environment is started by `tilt up -f Tiltfile.host`. The host services are located under `host`.
+The local test environment is started by `tilt up -f Tiltfile.host --port 10351 `. The host services are located under `host`.
 
 ## push new mender versions locally
 

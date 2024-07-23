@@ -29,16 +29,54 @@ install_docker_compose() {
     fi
 }
 
-# Function to configure Docker daemon
-configure_docker_daemon() {
-    cat <<EOF | sudo tee /etc/docker/daemon.json
-{
-  "hosts": ["tcp://0.0.0.0:2375", "unix:///var/run/docker.sock"]
+# Install iptables nftables
+install_iptables_nftables() {
+    # Install iptables and nftables
+    sudo apt-get update
+    sudo apt-get install -y iptables nftables
+
+    # Switch to nftables
+    sudo update-alternatives --set iptables /usr/sbin/iptables-nft
+    sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+    sudo update-alternatives --set arptables /usr/sbin/arptables-nft
+    sudo update-alternatives --set ebtables /usr/sbin/ebtables-nft
 }
-EOF
-    sudo systemctl restart docker
-    sudo ufw allow 2375/tcp
-    sudo ufw enable
+
+
+# create docker certs to secure docker daemon
+create_docker_certs() {
+    sudo mkdir -p /etc/docker/certs
+
+    # Function to generate CA certificate and key
+    sudo openssl genrsa -aes256 -out /etc/docker/certs/ca-key.pem 4096
+    sudo openssl req -new -x509 -days 365 -key /etc/docker/certs/ca-key.pem -sha256 -out /etc/docker/certs/ca.pem
+    
+    # Function to generate server certificate and key
+    sudo openssl genrsa -out /etc/docker/certs/server-key.pem 4096
+    sudo openssl req -subj "/CN=$(hostname)" -sha256 -new -key /etc/docker/certs/server-key.pem -out /etc/docker/certs/server.csr
+    echo subjectAltName = DNS:$(hostname),IP:127.0.0.1 | sudo tee /etc/docker/certs/extfile.cnf
+    sudo openssl x509 -req -days 365 -sha256 -in /etc/docker/certs/server.csr -CA /etc/docker/certs/ca.pem -CAkey /etc/docker/certs/ca-key.pem -CAcreateserial -out /etc/docker/certs/server-cert.pem -extfile /etc/docker/certs/extfile.cnf
+    
+    # Function to generate client certificate and key
+    sudo openssl genrsa -out /etc/docker/certs/key.pem 4096
+    sudo openssl req -subj '/CN=client' -new -key /etc/docker/certs/key.pem -out /etc/docker/certs/client.csr
+    echo extendedKeyUsage = clientAuth | sudo tee /etc/docker/certs/extfile-client.cnf
+    sudo openssl x509 -req -days 365 -sha256 -in /etc/docker/certs/client.csr -CA /etc/docker/certs/ca.pem -CAkey /etc/docker/certs/ca-key.pem -CAcreateserial -out /etc/docker/certs/cert.pem -extfile /etc/docker/certs/extfile-client.cnf
+}
+
+
+# Function to configure Docker daemon to use TLS certificates for secure communication
+configure_docker_daemon() {
+    sudo bash -c 'cat > /etc/docker/daemon.json <<EOF
+{
+  "hosts": ["tcp://0.0.0.0:2376", "unix:///var/run/docker.sock"],
+  "tls": true,
+  "tlsverify": true,
+  "tlscacert": "/etc/docker/certs/ca.pem",
+  "tlscert": "/etc/docker/certs/server-cert.pem",
+  "tlskey": "/etc/docker/certs/server-key.pem"
+}
+EOF'
 }
 
 # Function to display Docker versions
@@ -137,6 +175,29 @@ check_environment_vars() {
         exit 1
     fi
 
+}
+
+# Function to restart Docker daemon
+restart_docker() {
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+}
+
+# Function to check if Docker started correctly
+check_docker_status() {
+    if sudo systemctl is-active --quiet docker; then
+        echo "Docker TLS/SSL configuration completed. Docker daemon is now accessible over TCP on port 2376."
+    else
+        echo "Docker failed to start correctly. Please check Docker logs."
+        sudo journalctl -u docker.service
+    fi
+}
+
+display_client_instructions() {
+    echo "To access the Docker daemon with the Docker client, set the following environment variables:"
+    echo "export DOCKER_TLS_VERIFY=1"
+    echo "export DOCKER_HOST=tcp://$(hostname):2376"
+    echo "export DOCKER_CERT_PATH=/etc/docker/certs"
 }
 
 # Main script execution

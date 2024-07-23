@@ -81,16 +81,7 @@ jobs:
 
     - name: Build and upload Mender artifacts
       env:
-        ARTIFACT_NAME: mendertemplate
-        PLATFORM: linux/amd64
-        APPLICATION_NAME: mendertemplate
-        IMAGE: jeffail/benthos:latest
-        ORCHESTRATOR: docker-compose
-        OUTPUT_DIR: ./artifacts
-        SOFTWARE_NAME: softwarename
         SOFTWARE_VERSION: ${{ needs.create-release.outputs.new_release_version }}
-        MANIFESTS_DIRS: ./manifests/device/http-producer
-        DEVICE_TYPES: futro
         MENDER_SERVER_URL: ${{ secrets.MENDER_SERVER_URL }}
         MENDER_USERNAME: ${{ secrets.MENDER_USERNAME }}
         MENDER_PASSWORD: ${{ secrets.MENDER_PASSWORD }}

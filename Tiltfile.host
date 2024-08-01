@@ -1,1 +1,2 @@
 include('host/http-consumer/Tiltfile')
+# include('host/nats/Tiltfile')

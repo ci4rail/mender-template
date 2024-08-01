@@ -1,3 +1,11 @@
+## [1.2.1](https://github.com/ci4rail/mender-template/compare/v1.2.0...v1.2.1) (2024-08-01)
+
+
+### Bug Fixes
+
+* bootstrap script, artifact build ([7460bd5](https://github.com/ci4rail/mender-template/commit/7460bd5af87f0cbfbae6ceb64fbdf03800079a43))
+* some fixes ([98994e2](https://github.com/ci4rail/mender-template/commit/98994e2a72852832ea7f4c5ceebf6a6c674abcde))
+
 # [1.2.0](https://github.com/ci4rail/mender-template/compare/v1.1.1...v1.2.0) (2024-07-10)
 
 

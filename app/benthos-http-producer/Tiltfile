@@ -1,4 +1,0 @@
-docker_compose([
-    'manifest/docker-compose.yaml'
-])
-

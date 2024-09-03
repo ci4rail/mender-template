@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/ci4rail/mender-template/compare/v1.2.1...v1.2.2) (2024-09-03)
+
+
+### Bug Fixes
+
+* rework ([537d090](https://github.com/ci4rail/mender-template/commit/537d090eb37e67c7880238391094cd4829e12bad))
+
 ## [1.2.1](https://github.com/ci4rail/mender-template/compare/v1.2.0...v1.2.1) (2024-08-01)
 
 

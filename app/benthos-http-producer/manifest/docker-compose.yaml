@@ -11,3 +11,4 @@ services:
       CONSUMER_PATH: "/post"
     command: "-c /benthos.yaml"
     network_mode: host
+   

@@ -2,8 +2,6 @@
 
 Template project to create multi-application deployments for mender based systems.
 
-![Folder](./docs/folders.png "Folder")
-
 ## Use this Template
 
 This is a github template project. So use "Use this template" and create a new repository for your project. 
@@ -29,7 +27,22 @@ To prepare a ubuntu based system, please login into your device and run the inst
 Applications are located under `apps/<application>`
 
 To add a new application, create a folder under `apps/<application>` and add a valid docker-compose file with all its configurations.
-Then extend the variable `MANIFESTS_DIRS` in `Makefile` with the path to your new application. 
+
+Then adjust `config.yaml`: 
+
+´´´yaml
+project: mender-template
+application:
+  - name: "benthos-http-producer"
+    architectures: [linux/amd64, linux/arm64]
+    device-types: [mydevice]
+    manifest: app/benthos-http-producer/manifest
+    images:
+      - name: BENTHOS
+        image: docker.io/jeffail/benthos:latest
+      - name: GOTEMPLATE
+        image:  recorder-app
+´´´
 
 ## Local development
 

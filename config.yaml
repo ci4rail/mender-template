@@ -7,5 +7,4 @@ application:
     images:
       - name: BENTHOS
         image: docker.io/jeffail/benthos:latest
-      - name: GOTEMPLATE
-        image:  recorder-app
+

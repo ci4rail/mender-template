@@ -85,7 +85,7 @@ jobs:
     - name: Build Artifacts
       env:
         SOFTWARE_VERSION: ${{ needs.create-release.outputs.new_release_version }}
-      run: sudo python app.py build-artifacts --version $SOFTWARE_VERSION
+      run: python app.py build-artifacts --version $SOFTWARE_VERSION
 
     - name: Upload Artifacts
       env:
@@ -94,4 +94,4 @@ jobs:
         MENDER_USERNAME: ${{ secrets.MENDER_USERNAME }}
         MENDER_PASSWORD: ${{ secrets.MENDER_PASSWORD }}
         MENDER_TENANT_TOKEN: ${{ secrets.MENDER_TENANT_TOKEN }}
-      run: sudo python app.py upload-artifacts
+      run: python app.py upload-artifacts

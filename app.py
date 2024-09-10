@@ -89,7 +89,7 @@ def build_artifacts(version, output_dir, verbose, use_local):
                     + f"--orchestrator \"docker-compose\" "
                     + f"--manifests-dir \"{manifest}\" "
                     + f"--output-path \"{output_path}\" "
-                    + "-- "  # Adding a space to separate the optional args
+                    + "-- "  # Separate the optional args
                     + f"--software-name=\"{app_name}\" "
                     + f"--software-version=\"{version}\""
                 )

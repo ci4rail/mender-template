@@ -1,0 +1,526 @@
+#!/usr/bin/env bash
+# Copyright 2023 Northern.tech AS
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+set -e
+set -u
+
+APPLICATION_NAME_ALLOWED_REGEX="[^a-zA-Z0-9_-]"
+K8S_ORCHESTRATOR="k8s"
+DOCKER_COMPOSE_ORCHESTRATOR="docker-compose"
+
+show_help() {
+    cat << EOF
+
+Simple tool to generate Mender Artifact suitable for App Update Module
+
+Usage: $0 [options] [-- [options-for-mender-artifact] ]
+
+    Options: [ -n|--artifact-name -t|--device-type -o|--output_path -i|--image -d|--deep-delta -p|--platform -r|--orchestrator -o|--k8s-ctr-address -c|--k8s-namespace -s|--manifests-dir -m|--help -h|--application-name -a]
+
+        --artifact-name     - Artifact name
+        --device-type       - Target device type identification (can be given more than once)
+        --output-path       - Path to output artifact file. Default: reboot-artifact.mender
+        --image [current-url,]new-url       - Path to output artifact file. Default: reboot-artifact.mender
+        --deep-delta        - Calculate delta by parsing the image
+        --manifests-dir     - Directory containing orchestrator-specific manifests describing the deployment
+        --platform          - Platform of the images, e.g.: linux/arm/v7
+        --orchestrator      - Name of the orchestrator, and name of the sub-module, e.g.: docker-compose
+        --k8s-ctr-address   - k8s orchestrator specific: containerd address, e.g.: /run/k3s/containerd/containerd.sock
+        --k8s-namespace     - k8s orchestrator specific: kubernetes target namespace, e.g.: default
+        --application-name  - Name of the application running on a device, must contain only characters from the class $APPLICATION_NAME_ALLOWED_REGEX
+        --use-local         - Use local images instead of pulling them
+        --help              - Show help and exit
+
+Anything after a '--' gets passed directly to the mender-artifact tool.
+
+EOF
+}
+
+show_help_and_exit_error() {
+    show_help
+    exit 1
+}
+
+check_dependency() {
+    if ! which "$1" > /dev/null; then
+        echo "The $1 utility is not found but required to generate Artifacts." >&2
+        return 1
+    fi
+}
+
+if ! check_dependency mender-artifact; then
+    echo "Please follow the instructions here to install mender-artifact and then try again: https://docs.mender.io/downloads#mender-artifact" >&2
+    exit 1
+fi
+
+delta_cmd="xdelta3 -e -s"
+declare -a device_types
+artifact_name=""
+output_path="app-artifact.mender"
+passthrough_args=""
+version="1.0"
+orchestrator=""
+k8s_ctr_address=""
+k8s_namespace=""
+platform=""
+manifests_dir=""
+declare -a images
+declare -a images_shas
+deep_delta=false
+use_local_images=false
+
+
+set +u
+while test $# -gt 0; do
+    set -u
+    case "$1" in
+        --application-name | -a)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            application_name="$2"
+            if [[ $application_name =~ $APPLICATION_NAME_ALLOWED_REGEX ]]; then
+                echo "ERROR: application name must contain only alpha-numerics, _ or -" >&2
+                show_help_and_exit_error
+            fi
+            shift 2
+            ;;
+        --manifests-dir | -m)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            manifests_dir="$2"
+            shift 2
+            ;;
+        --orchestrator | -o)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            orchestrator="$2"
+            shift 2
+            ;;
+        --k8s-ctr-address | -c)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            k8s_ctr_address="$2"
+            shift 2
+            ;;
+        --k8s-namespace | -s)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            k8s_namespace="$2"
+            shift 2
+            ;;
+        --platform | -p)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            platform="$2"
+            shift 2
+            ;;
+        --use-local)
+            use_local_images=true
+            shift 1
+            ;;    
+        --image | -i)
+            # --image docker.io/library/debian:11,docker.io/library/debian:latest@sha256:a94cd7c7d58f483affd5937853ad4d24caa18cd7c2ec9ef65a9e528dfbc5eb07 --image docker.io/library/postgres:15.1
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            images+=($(echo "$2" | cut -f1 -d,)) # current
+            images+=($(echo "$2" | cut -f2 -d,)) # new, if current!=new then we need to generate delta.
+            shift 2
+            ;;
+        --deep-delta | -d)
+            deep_delta=true
+            shift 1
+            ;;
+        --device-type | -t)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            device_types+=("-t" "$2")
+            shift 2
+            ;;
+        --artifact-name | -n)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            artifact_name=$2
+            shift 2
+            ;;
+        --output-path | -o)
+            if [ -z "$2" ]; then
+                show_help_and_exit_error
+            fi
+            output_path=$2
+            shift 2
+            ;;
+        -h | --help)
+            show_help
+            exit 0
+            ;;
+        --)
+            shift
+            passthrough_args="$@"
+            break
+            ;;
+        -*)
+            echo "Error: unsupported option $1" >&2
+            show_help_and_exit_error
+            ;;
+        *)
+            shift
+            ;;
+    esac
+    set +u
+done
+
+if [ -z "${artifact_name}" ]; then
+    echo "Artifact name not specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [ -z "${device_types}" ]; then
+    echo "Device type not specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [ -z "${orchestrator}" ]; then
+    echo "Orchestrator not specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [ -z "${platform}" ]; then
+    echo "Platform not specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [ -z "${manifests_dir}" ]; then
+    echo "Directory containing manifests not specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [ ${#images[@]} -lt 1 ]; then
+    echo "No images specified. Aborting." >&2
+    show_help_and_exit_error
+fi
+
+if [[ "${deep_delta}" == "true" && "${orchestrator}" == "$K8S_ORCHESTRATOR"  ]]; then
+    echo "deep deltas are currently not supported with $K8S_ORCHESTRATOR orchestrator." >&2
+    show_help_and_exit_error
+fi
+
+temp_dir="$(mktemp -d)"
+[[ "${temp_dir}" == "" ]] && {
+    echo "cant get the temporary directory" >&2
+    show_help_and_exit_error
+}
+mkdir "${temp_dir}/images"
+
+function cleanup() {
+    rm -Rf "$temp_dir"
+}
+trap cleanup EXIT SIGQUIT SIGTERM
+
+get_image_sha() {
+    local -r url="$1"
+
+    [[ "$url" == "" ]] && {
+        echo none
+        return 0
+    }
+    if [[ "${orchestrator}" == "${DOCKER_COMPOSE_ORCHESTRATOR}" ]]; then
+        docker image inspect "${url}" --format='{{.ID}}' | cut -f2 -d: # let's hope we do not have to preserve the fact that it was sha256:
+    else
+        ctr image ls name=="${url}" | sed -n -e 's/.*sha256:\([a-zA-Z0-9]*\).*/\1/p' # let's hope we do not have to preserve the fact that it was sha256:
+    fi
+}
+
+# Check if the image is already present locally
+is_image_local() {
+    local image="$1"
+    if docker image inspect "$image" > /dev/null 2>&1; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# Pull the image if it is not already present locally
+pull_image() {
+    local -r url="$1"
+
+    if [[ "$use_local_images" == "true" && $(is_image_local "$url") == "true" ]]; then
+        echo "Using local image: $url"
+        return 0
+    fi
+
+    [[ "$url" == "" ]] && { return 0; }
+    if [[ "${orchestrator}" == "${DOCKER_COMPOSE_ORCHESTRATOR}" ]]; then
+        docker pull "$url" --platform "$platform"
+    else
+        ctr image pull "$url" --platform "$platform"
+    fi
+}
+
+
+export_image() {
+    local -r image="$1"
+    local -r output="$2"
+
+    [[ "$image" == "" ]] && { return 0; }
+    if [[ "${orchestrator}" == "${DOCKER_COMPOSE_ORCHESTRATOR}" ]]; then
+        docker image save "$image" -o "${output}"
+    else
+        ctr image export "${output}" "$image" --platform "$platform"
+    fi
+}
+
+function parse_parent_child() {
+    local -r root_dir="$1"/parent-child
+    local -A id2parent
+    local -A parent2id
+    local -a ids
+    local -a a
+    local json
+    local i
+    local parentid
+    local id
+
+    while read -r json; do
+        parentid=$(cat "$json" | jq -r .parent)
+        id=$(dirname "$json")
+        id=$(basename "$id")
+        id2parent[${id}]=${parentid}
+        parent2id[${parentid}]=${id}
+        [[ "$parentid" != "null" ]] && ids+=("${id}")
+    done < <(find "$1" -name json)
+
+    set +e
+    parentid="${parent2id[null]}"
+    mkdir -p "${root_dir}/${parentid}"
+    i=0
+    while [[ ${#ids[@]} -gt 0 ]]; do
+        id=${ids[${i}]}
+        parentid=${id2parent[${id}]}
+        [[ "$parentid" == "" ]] && { break; }
+        parent_dir=$(find "$root_dir" -name "$parentid" -and -type d)
+        if [[ "$parent_dir" != "" ]]; then
+            mkdir -p "${parent_dir}/${id}"
+            a=("${ids[@]/${id}/}")
+            ids=(${a[@]})
+            i=0
+        else
+            let i++
+            [[ $i -ge ${#ids[@]} ]] && i=0
+        fi
+    done
+    set -e
+}
+
+# deep_delta "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+deep_delta() {
+    local -r root_dir="$1"
+    local -r current="$2"
+    local -r new="$3"
+    local -r output="$4"
+    local -r current_dir="${root_dir}/current-image"
+    local -r new_dir="${root_dir}/new-image"
+    local -A id2sum_current
+    local -A id2sum_new
+    local sum
+    local sum_current
+    local id
+    local max_level
+    local i
+    local -a current_ids
+    local -a new_ids
+    local -A sum2path_new
+    local -A sum2path_current
+    local tmp_file=$(mktemp)
+
+    rm -f "$tmp_file"
+    mkdir -p "${current_dir}"
+    mkdir -p "${new_dir}"
+    tar xf "$current" -C "$current_dir" || {
+        echo "ERROR errors unpacking $current"
+        return 1
+    }
+    tar xf "$new" -C "$new_dir" || {
+        echo "ERROR errors unpacking $new"
+        return 1
+    }
+    parse_parent_child "$current_dir"
+    parse_parent_child "$new_dir"
+    tree "$current_dir"
+    tree "$new_dir"
+    while read -r; do
+        sum=$(sha256sum "$REPLY" | cut -f1 -d' ')
+        id=$(dirname "$REPLY")
+        id=$(basename "$id")
+        id2sum_current[$id]=$sum
+        sum2path_current[$sum]="$REPLY"
+    done < <(find "$current_dir" -name layer.tar)
+    while read -r; do
+        sum=$(sha256sum "$REPLY" | cut -f1 -d' ')
+        echo "sum of $REPLY is $sum"
+        id=$(dirname "$REPLY")
+        id=$(basename "$id")
+        id2sum_new[$id]=$sum
+        sum2path_new[$sum]="$REPLY"
+        echo "sum2path_new saving $sum"
+    done < <(find "$new_dir" -name layer.tar)
+    max_level=$(find "$current_dir" -name layer.tar | wc -l)
+    i=1
+    while [[ $i -le $max_level ]]; do
+        id=$(find "${current_dir}"/parent-child -maxdepth $i -mindepth $i -type d)
+        id=$(basename "${id}")
+        current_ids+=("${id}")
+        id=$(find "${new_dir}"/parent-child -maxdepth $i -mindepth $i -type d)
+        id=$(basename "${id}")
+        new_ids+=("${id}")
+        let i++
+    done
+    for ((i = 0; i < ${max_level}; i++)); do
+        id=${current_ids[${i}]}
+        sum_current=${id2sum_current[${id}]}
+        id=${new_ids[${i}]}
+        sum=${id2sum_new[${id}]}
+        echo "level $i $id $sum $sum_current"
+        if [[ "${sum}" == "${sum_current}" ]]; then
+            echo "      layers match sum:$sum"
+            echo "${sum}" > "${sum2path_new[$sum]}".sha256sum
+            rm -f "${sum2path_new[$sum]}"
+        else
+            echo "      modified layer"
+            echo $delta_cmd "${sum2path_current[$sum_current]}" "${sum2path_new[$sum]}" "$tmp_file"
+            $delta_cmd "${sum2path_current[$sum_current]}" "${sum2path_new[$sum]}" "$tmp_file"
+            mv "$tmp_file" "${sum2path_new[$sum]}".vcdiff
+            echo "${sum_current}" > "${sum2path_new[$sum]}".current.sha256sum
+            echo "${sum}" > "${sum2path_new[$sum]}".new.sha256sum
+            rm -f "${sum2path_new[$sum]}"
+        fi
+    done
+    rm -f "$output"
+    rm -Rf "$current_dir"/parent-child "$new_dir"/parent-child
+    tar -cf "$output" -C "$new_dir" .
+    rm -Rf "$current_dir" "$new_dir"
+}
+
+prepare_images() {
+    local -r root_dir="$1"
+    local i
+    local j
+    local url_current
+    local url_new
+    local output_dir
+
+    for ((i = 0; i < ${#images[@]}; i++)); do
+        pull_image "${images[${i}]}"
+        images_shas+=($(get_image_sha "${images[${i}]}"))
+    done
+    declare -p images_shas
+
+    for ((i = 0; i < ${#images[@]}; i += 2)); do
+        j=$((i + 1))
+        url_current=${images[${i}]}
+        url_new=${images[${j}]}
+        output_dir="${root_dir}/${images_shas[${j}]}"
+        [[ -d "$output_dir" ]] || mkdir "$output_dir"
+        echo "${url_new}" > "${output_dir}/url-new.txt"
+        echo "${url_current}" > "${output_dir}/url-current.txt"
+        echo "${images_shas[${i}]}" > "${output_dir}/sums-current.txt"
+        echo "${images_shas[${j}]}" >> "${output_dir}/sums-new.txt"
+        if [[ "${url_current}" == "${url_new}" ]]; then
+            export_image "$url_new" "${output_dir}/image.img"
+        else
+            export_image "$url_new" "${output_dir}/image-new.img"
+            export_image "$url_current" "${output_dir}/image-current.img"
+            if ! check_dependency xdelta3; then
+                echo "For delta artifacts xdelta3 is required" >&2
+                exit 1
+            fi
+            if [[ ${deep_delta} == true ]]; then
+                deep_delta "${root_dir}" "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+                touch "${output_dir}"/deep_delta
+            else
+                $delta_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+            fi
+            rm -f "${output_dir}/image-new.img" "${output_dir}/image-current.img"
+        fi
+    done
+}
+
+generate_metadata() {
+    local -r output="$1"
+    local sha
+    local -a shas
+
+    echo -ne "{" > "${output}"
+    echo -ne '"application_name":' >> "${output}"
+    printf '"%s",' "$application_name" >> "${output}"
+    echo -ne '"orchestrator":' >> "${output}"
+    printf '"%s",' "$orchestrator" >> "${output}"
+    echo -ne '"platform":' >> "${output}"
+    printf '"%s",' "$platform" >> "${output}"
+    echo -ne '"version":' >> "${output}"
+    printf '"%s",' "$version" >> "${output}"
+    echo -ne '"images":[' >> "${output}"
+    for sha in $(echo "${images_shas[@]}" | tr ' ' '\n' | sort | uniq); do
+        shas+=($sha)
+    done
+    for ((i = 0; i < ${#shas[@]}; i++)); do
+        printf '"%s"' "${shas[${i}]}" >> "${output}"
+        [[ $((i + 1)) -lt ${#shas[@]} ]] && echo -ne "," >> "${output}"
+    done
+    echo -ne ']' >> "${output}"
+    if [[ "${k8s_ctr_address}" != "" || "${k8s_namespace}" != "" ]]; then
+        echo -ne ',"env":{' >> "${output}"
+        echo -ne "\"K8S_CTR_ADDRESS\":\"${k8s_ctr_address}\"," >> "${output}"
+        echo -ne "\"K8S_NAMESPACE\":\"${k8s_namespace}\"" >> "${output}"
+        echo -ne '}' >> "${output}"
+    fi
+    echo -ne "}" >> "${output}"
+    echo "saving metadata:"
+    echo "--"
+    cat "${output}"
+    echo
+    echo "--"
+}
+
+prepare_images "${temp_dir}/images"
+( cd "${temp_dir}" && tar czvf images.tar.gz images  )
+cp -a "${manifests_dir}" "${temp_dir}/manifests"
+( cd "${temp_dir}" && tar czvf "manifests.tar.gz" manifests  )
+generate_metadata "${temp_dir}/metadata.json"
+
+mender-artifact write module-image \
+    -T app \
+    "${device_types[@]}" \
+    -o "$output_path" \
+    -n "$artifact_name" \
+    --meta-data "${temp_dir}/metadata.json" \
+    -f "${temp_dir}/images.tar.gz" \
+    -f "${temp_dir}/manifests.tar.gz" \
+    --software-name "$application_name" \
+    $passthrough_args
+
+echo "Artifact $output_path generated successfully:"
+mender-artifact read "$output_path"
+
+exit 0

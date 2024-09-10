@@ -20,8 +20,7 @@ RUN apt-get update && apt-get install --assume-yes \
     docker.io
 
 # Install app-gen
-RUN wget https://raw.githubusercontent.com/mendersoftware/app-update-module/1.0.0/gen/app-gen \
-    -O /usr/local/bin/app-gen && chmod +x /usr/local/bin/app-gen
+COPY hack/app-gen /usr/local/bin/app-gen
 
 # Install mender-cli
 RUN wget https://downloads.mender.io/mender-cli/1.12.0/linux/mender-cli \

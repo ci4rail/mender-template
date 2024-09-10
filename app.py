@@ -2,6 +2,9 @@ import os
 import subprocess
 import click
 import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CONFIG_FILE = "config.yaml"
 
@@ -41,8 +44,8 @@ def format_images_for_build(images):
 # Build Docker image
 def build_docker_image(docker_image_name, verbose):
     """Builds the Docker image using the Dockerfile at the specified path."""
-    click.echo(f"Building Docker image {docker_image_name} from docker/Dockerfile.mender...")
-    build_command = f"docker build -t {docker_image_name} -f docker/Dockerfile.mender ."
+    click.echo(f"Building Docker image {docker_image_name} from Dockerfile...")
+    build_command = f"docker build -t {docker_image_name} -f Dockerfile ."
     run_command(build_command, verbose=verbose)
     click.echo(f"Docker image {docker_image_name} built successfully.")
 
@@ -51,11 +54,12 @@ def build_docker_image(docker_image_name, verbose):
 @click.option('--version', default=lambda: run_command('git rev-parse --short HEAD', capture_output=True), help='Version or Git hash for the build. Default is the current Git hash.')
 @click.option('--output-dir', default='./artifacts', help='Output directory for the generated artifacts.')
 @click.option('--verbose', is_flag=True, help='Enable detailed output of executed commands.')
-def build_artifacts(version, output_dir, verbose):
+@click.option('--use-local', is_flag=True, help='Use local images for the build.')
+def build_artifacts(version, output_dir, verbose, use_local):
     """Build Mender artifacts for each platform, device type, and manifest."""
     config = load_config()
     project_name = config.get('project', 'project')
-    docker_image_name = f"{project_name}-build"
+    docker_image_name = f"{project_name}-build" 
 
     # Get UID, GID, and DID values from the host system
     uid = run_command("id -u", capture_output=True)
@@ -103,11 +107,12 @@ def build_artifacts(version, output_dir, verbose):
                     f"{env_vars_str} "
                     f"{docker_image_name} "
                     f"app-gen --artifact-name \"{artifact_name}\" "
+                    f"--use-local-images " if use_local else ""  # Use local images if flag is enabled
                     f"--device-type \"{device}\" "
                     f"--platform \"{platform}\" "
                     f"--application-name \"{app_name}\" "
                     f"{images_str} "  # Pass the images for the app
-                    f"--orchestrator \"docker\" "
+                    f"--orchestrator \"docker-compose\" "
                     f"--manifests-dir \"/workdir/{manifest}\" "
                     f"--output-path \"/workdir/{output_path}\" "
                     f"-- "
@@ -140,8 +145,7 @@ def upload_artifacts(output_dir, verbose):
 
     # Login to Mender CLI
     login_command = (
-        f"docker run --rm -v {os.getcwd()}:/workdir -e UID={uid} -e GID={gid} "
-        f"-e DID={did} {docker_image_name} "
+        f"docker run --rm -v {os.getcwd()}:/workdir -v cache:/home/user/.cache/mender/ {docker_image_name} "
         f"mender-cli login --server {mender_server_url} --username {mender_username} "
         f"--password {mender_password} --token-value {mender_tenant_token}"
     )
@@ -153,8 +157,7 @@ def upload_artifacts(output_dir, verbose):
             artifact_path = os.path.join(output_dir, artifact)
             click.echo(f"Uploading {artifact_path} to Mender server...")
             upload_command = (
-                f"docker run --rm -v {os.getcwd()}:/workdir -e UID={uid} -e GID={gid} "
-                f"-e DID={did} {docker_image_name} "
+                f"docker run --rm -v {os.getcwd()}:/workdir -v cache:/home/user/.cache/mender/ {docker_image_name} "
                 f"mender-cli artifacts upload {artifact_path} --server {mender_server_url}"
             )
             run_command(upload_command, verbose=verbose)

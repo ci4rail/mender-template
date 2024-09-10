@@ -1,4 +1,4 @@
-project: myproject
+project: mender-template
 application:
   - name: "benthos-http-producer"
     architectures: [linux/amd64, linux/arm64]
@@ -7,11 +7,5 @@ application:
     images:
       - name: BENTHOS
         image: docker.io/jeffail/benthos:latest
-  - name: go-template
-    architectures: [linux/amd64, linux/arm64]
-    device-types: [mydevice]
-    manifest: app/go-template/manifest
-    images:
       - name: GOTEMPLATE
-        image:  ghcr.io/ci4rail/go-template:pr-pr-check
-
+        image:  recorder-app

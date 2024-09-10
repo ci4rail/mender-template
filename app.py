@@ -41,14 +41,6 @@ def construct_env_variables(images):
 def format_images_for_build(images):
     return ' '.join([f"--image \"{image['image']}\"" for image in images if 'image' in image])
 
-# Build Docker image
-def build_docker_image(docker_image_name, verbose):
-    """Builds the Docker image using the Dockerfile at the specified path."""
-    click.echo(f"Building Docker image {docker_image_name} from Dockerfile...")
-    build_command = f"docker build -t {docker_image_name} -f Dockerfile ."
-    run_command(build_command, verbose=verbose)
-    click.echo(f"Docker image {docker_image_name} built successfully.")
-
 # Build artifacts for each platform, device, and manifest
 @click.command()
 @click.option('--version', default=lambda: run_command('git rev-parse --short HEAD', capture_output=True), help='Version or Git hash for the build. Default is the current Git hash.')
@@ -59,15 +51,6 @@ def build_artifacts(version, output_dir, verbose, use_local):
     """Build Mender artifacts for each platform, device type, and manifest."""
     config = load_config()
     project_name = config.get('project', 'project')
-    docker_image_name = f"{project_name}-build" 
-
-    # Get UID, GID, and DID values from the host system
-    uid = run_command("id -u", capture_output=True)
-    gid = run_command("id -g", capture_output=True)
-    did = run_command("getent group docker | cut -d: -f3", capture_output=True)
-
-    # Build Docker image before building artifacts
-    build_docker_image(docker_image_name, verbose)
 
     applications = config.get('application', [])
     os.makedirs(output_dir, exist_ok=True)
@@ -95,31 +78,22 @@ def build_artifacts(version, output_dir, verbose, use_local):
 
                 click.echo(f"Building Mender artifact for {app_name}, device {device}, platform {platform} with commit {version}...")
 
-                # Docker run command with mounted Docker socket and UID/GID/DID environment variables
+                # Run the app-gen script to build the Mender artifact
                 build_command = (
-                    f"docker run --rm "
-                    f"-v {os.getcwd()}:/workdir "
-                    f"-v /var/run/docker.sock:/var/run/docker.sock "
-                    f"-v /run/containerd/containerd.sock:/run/containerd/containerd.sock "
-                    f"-e UID={uid} "
-                    f"-e GID={gid} "
-                    f"-e DID={did} "
-                    f"{env_vars_str} "
-                    f"{docker_image_name} "
-                    f"app-gen --artifact-name \"{artifact_name}\" "
-                    f"--use-local-images " if use_local else ""  # Use local images if flag is enabled
-                    f"--device-type \"{device}\" "
-                    f"--platform \"{platform}\" "
-                    f"--application-name \"{app_name}\" "
-                    f"{images_str} "  # Pass the images for the app
-                    f"--orchestrator \"docker-compose\" "
-                    f"--manifests-dir \"/workdir/{manifest}\" "
-                    f"--output-path \"/workdir/{output_path}\" "
-                    f"-- "
-                    f"--software-name=\"{app_name}\" "
-                    f"--software-version=\"{version}\""
+                    f"hack/app-gen --artifact-name \"{artifact_name}\" "
+                    + (f"--use-local " if use_local else "")  # Use local images if flag is enabled
+                    + f"--device-type \"{device}\" "
+                    + f"--platform \"{platform}\" "
+                    + f"--application-name \"{app_name}\" "
+                    + f"{images_str} "  # Pass the images for the app
+                    + f"--orchestrator \"docker-compose\" "
+                    + f"--manifests-dir \"{manifest}\" "
+                    + f"--output-path \"{output_path}\" "
+                    + "-- "  # Adding a space to separate the optional args
+                    + f"--software-name=\"{app_name}\" "
+                    + f"--software-version=\"{version}\""
                 )
-                
+
                 run_command(build_command, verbose=verbose)
                 click.echo(f"Mender artifact built successfully: {output_path}")
 
@@ -131,21 +105,14 @@ def upload_artifacts(output_dir, verbose):
     """Upload Mender artifacts to the Mender server."""
     config = load_config()
     project_name = config.get('project', 'project')
-    docker_image_name = f"{project_name}-build"
 
     mender_server_url = os.getenv("MENDER_SERVER_URL")
     mender_username = os.getenv("MENDER_USERNAME")
     mender_password = os.getenv("MENDER_PASSWORD")
     mender_tenant_token = os.getenv("MENDER_TENANT_TOKEN")
 
-    # Get UID, GID, and DID values from the host system
-    uid = run_command("id -u", capture_output=True)
-    gid = run_command("id -g", capture_output=True)
-    did = run_command("getent group docker | cut -d: -f3", capture_output=True)
-
     # Login to Mender CLI
     login_command = (
-        f"docker run --rm -v {os.getcwd()}:/workdir -v cache:/home/user/.cache/mender/ {docker_image_name} "
         f"mender-cli login --server {mender_server_url} --username {mender_username} "
         f"--password {mender_password} --token-value {mender_tenant_token}"
     )
@@ -157,7 +124,6 @@ def upload_artifacts(output_dir, verbose):
             artifact_path = os.path.join(output_dir, artifact)
             click.echo(f"Uploading {artifact_path} to Mender server...")
             upload_command = (
-                f"docker run --rm -v {os.getcwd()}:/workdir -v cache:/home/user/.cache/mender/ {docker_image_name} "
                 f"mender-cli artifacts upload {artifact_path} --server {mender_server_url}"
             )
             run_command(upload_command, verbose=verbose)

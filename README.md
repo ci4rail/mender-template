@@ -72,6 +72,5 @@ Please define the following environment variables:
 * MENDER_PASSWORD
 * MENDER_TENANT_TOKEN
 
-Then run `make all`.
-
-
+Run `python3 app.py build-artifacts` to build the artifacts.
+To upload arifacts to your mender server run `python3 app.py upload-artifacts`
